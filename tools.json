@@ -2,7 +2,7 @@
   {
     "name": "Snake.io",
     "description": "Play classic snake game directly in the app.",
-    "icon": "https://cdn-icons-png.flaticon.com/512/5113/5113030.png",
-    "url": "https://[your_username].github.io/my-cloud-tools/snake.html"
+    "icon": "https://raw.githubusercontent.com/samiralam002004/my-cloud-tools/main/snake.webp",
+    "url": "https://samiralam002004.github.io/my-cloud-tools/snake.html"
   }
 ]
