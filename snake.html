@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Snake Game</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: white;
+            font-family: 'Roboto', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none; /* Mobile par swipe aur zoom rokne ke liye */
+        }
+        h2 { margin: 10px 0; color: #3949AB; font-size: 28px; }
+        span { color: #00E676; }
+        
+        canvas {
+            background-color: #1E1E1E;
+            border: 3px solid #3949AB;
+            border-radius: 10px;
+            box-shadow: 0px 0px 15px rgba(57, 73, 171, 0.5);
+        }
+
+        /* Mobile Controller Buttons */
+        .controls {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: 70px 70px 70px;
+            grid-template-rows: 70px 70px;
+            gap: 10px;
+            justify-content: center;
+        }
+        .btn {
+            background-color: #3949AB;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            font-size: 30px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            box-shadow: 0px 4px 0px #283593;
+        }
+        .btn:active {
+            background-color: #283593;
+            box-shadow: 0px 0px 0px #283593;
+            transform: translateY(4px);
+        }
+        #up { grid-column: 2; grid-row: 1; }
+        #left { grid-column: 1; grid-row: 2; }
+        #down { grid-column: 2; grid-row: 2; }
+        #right { grid-column: 3; grid-row: 2; }
+    </style>
+</head>
+<body>
+
+    <h2>Score: <span id="score">0</span></h2>
+    <canvas id="gameCanvas" width="300" height="300"></canvas>
+
+    <div class="controls">
+        <div class="btn" id="up">↑</div>
+        <div class="btn" id="left">←</div>
+        <div class="btn" id="down">↓</div>
+        <div class="btn" id="right">→</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreElement = document.getElementById("score");
+
+        const gridSize = 15;
+        const tileCount = canvas.width / gridSize;
+
+        let snake = [{ x: 10, y: 10 }];
+        let dx = 0;
+        let dy = 0;
+        let food = { x: 5, y: 5 };
+        let score = 0;
+        let speed = 130; // Game Speed
+
+        let gameInterval;
+
+        function resetGame() {
+            snake = [{ x: 10, y: 10 }];
+            dx = 0;
+            dy = 0;
+            score = 0;
+            scoreElement.innerText = score;
+            placeFood();
+            clearInterval(gameInterval);
+            gameInterval = setInterval(gameLoop, speed);
+        }
+
+        function gameLoop() {
+            let head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            // Deewar se takrana (Game Over)
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                return resetGame();
+            }
+
+            // Khud se takrana (Game Over)
+            for (let i = 0; i < snake.length; i++) {
+                if (snake[i].x === head.x && snake[i].y === head.y && (dx !== 0 || dy !== 0)) {
+                    return resetGame();
+                }
+            }
+
+            snake.unshift(head); // Naya head aage lagao
+
+            // Khana khana
+            if (head.x === food.x && head.y === food.y) {
+                score += 10;
+                scoreElement.innerText = score;
+                placeFood();
+            } else {
+                snake.pop(); // Agar khana nahi khaya toh pichla hissa hatao
+            }
+
+            draw();
+        }
+
+        function placeFood() {
+            food.x = Math.floor(Math.random() * tileCount);
+            food.y = Math.floor(Math.random() * tileCount);
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Food draw karo
+            ctx.fillStyle = "#FF5252";
+            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
+
+            // Snake draw karo
+            ctx.fillStyle = "#00E676";
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillRect(snake[i].x * gridSize, snake[i].y * gridSize, gridSize - 2, gridSize - 2);
+            }
+        }
+
+        // Mobile Touch & Click Controls
+        function setDir(newDx, newDy) {
+            // Ulat disha mein jaane se rokna (Reverse prevention)
+            if (dx === -newDx && dy === -newDy && snake.length > 1) return;
+            dx = newDx; 
+            dy = newDy;
+        }
+
+        // Touch event handlers for mobile WebView
+        const btnUp = document.getElementById('up');
+        const btnDown = document.getElementById('down');
+        const btnLeft = document.getElementById('left');
+        const btnRight = document.getElementById('right');
+
+        btnUp.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(0, -1); });
+        btnDown.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(0, 1); });
+        btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(-1, 0); });
+        btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(1, 0); });
+
+        // Mouse handlers for PC testing
+        btnUp.addEventListener('mousedown', () => setDir(0, -1));
+        btnDown.addEventListener('mousedown', () => setDir(0, 1));
+        btnLeft.addEventListener('mousedown', () => setDir(-1, 0));
+        btnRight.addEventListener('mousedown', () => setDir(1, 0));
+
+        resetGame();
+    </script>
+</body>
+</html>
