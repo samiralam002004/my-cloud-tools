@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Quick Notes",
+    "description": "Short revision notes for all subjects.",
+    "icon": "https://cdn-icons-png.flaticon.com/512/3135/3135810.png",
+    "url": "https://en.wikipedia.org/wiki/Special:Random" 
+  },
+  {
+    "name": "PYQ Papers",
+    "description": "Previous Year Question papers.",
+    "icon": "https://cdn-icons-png.flaticon.com/512/2602/2602414.png",
+    "url": "https://en.wikipedia.org/wiki/Special:Random"
+  },
+  {
+    "name": "Objective Qs",
+    "description": "Practice MCQs for exams.",
+    "icon": "https://cdn-icons-png.flaticon.com/512/3409/3409929.png",
+    "url": "https://en.wikipedia.org/wiki/Special:Random"
+  }
+]

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Birdy Bird</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #121212;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none; /* Mobile zoom rokne ke liye */
+            font-family: 'Press Start 2P', monospace;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 400px;
+            max-height: 700px;
+            background-color: #70C5CE; /* Sky Blue */
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            text-align: center;
+        }
+
+        h1 {
+            color: white;
+            font-size: 32px;
+            -webkit-text-stroke: 2px black;
+            text-shadow: 2px 2px 0 #000;
+            margin-bottom: 50px;
+        }
+
+        .blink {
+            color: white;
+            font-size: 14px;
+            animation: blinker 1s linear infinite;
+            -webkit-text-stroke: 1px black;
+        }
+
+        @keyframes blinker {
+            50% { opacity: 0; }
+        }
+
+        #scoreBoard {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            font-size: 40px;
+            color: white;
+            -webkit-text-stroke: 2px black;
+            text-shadow: 2px 2px 0 #000;
+            z-index: 10;
+        }
+
+        #gameOverScreen {
+            display: none;
+            background-color: #F8E2A2;
+            border: 4px solid #DF8D4C;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 4px 4px 0px #000;
+        }
+
+        .score-title { color: #DF8D4C; font-size: 14px; margin-bottom: 10px; }
+        .score-num { color: white; font-size: 28px; -webkit-text-stroke: 2px black; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="scoreBoard" style="display: none;">0</div>
+
+        <!-- Start Screen -->
+        <div id="startScreen" class="ui-layer">
+            <h1>BIRDYBIRD</h1>
+            <div class="blink">TAP TO START</div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameOverScreenLayer" class="ui-layer" style="display: none;">
+            <h1 style="color: #FF7543; margin-bottom: 20px; font-size: 28px;">Game Over</h1>
+            <div id="gameOverScreen">
+                <div class="score-title">SCORE</div>
+                <div id="finalScore" class="score-num">0</div>
+                <div class="score-title">BEST</div>
+                <div id="bestScore" class="score-num">0</div>
+            </div>
+            <div class="blink" style="margin-top: 30px;">TAP TO RESTART</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        
+        const startScreen = document.getElementById("startScreen");
+        const gameOverScreenLayer = document.getElementById("gameOverScreenLayer");
+        const scoreBoard = document.getElementById("scoreBoard");
+        const finalScoreEl = document.getElementById("finalScore");
+        const bestScoreEl = document.getElementById("bestScore");
+
+        // Internal resolution setup
+        canvas.width = 320;
+        canvas.height = 480;
+
+        let frames = 0;
+        let gameState = "START"; // START, PLAY, GAMEOVER
+        let score = 0;
+        let bestScore = localStorage.getItem("birdyBestScore") || 0;
+
+        // Bird Object
+        const bird = {
+            x: 50, y: 150, width: 30, height: 24,
+            velocity: 0, gravity: 0.25, jump: -4.5, rotation: 0,
+            draw: function() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                // Rotation logic based on velocity
+                if (gameState === "PLAY") {
+                    this.rotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, (this.velocity * 0.1)));
+                }
+                ctx.rotate(this.rotation);
+
+                // Draw Bird Body (Yellow)
+                ctx.fillStyle = "#FFC800";
+                ctx.beginPath();
+                ctx.arc(0, 0, 12, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#000";
+                ctx.stroke();
+
+                // Wing
+                ctx.fillStyle = "#FFAE00";
+                ctx.beginPath();
+                ctx.ellipse(-4, 2, 6, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Eye
+                ctx.fillStyle = "#FFF";
+                ctx.beginPath();
+                ctx.arc(6, -4, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = "#000";
+                ctx.beginPath();
+                ctx.arc(7, -4, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Beak
+                ctx.fillStyle = "#FF7300";
+                ctx.beginPath();
+                ctx.ellipse(10, 2, 6, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.restore();
+            },
+            update: function() {
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+
+                // Hit Ground
+                if (this.y + 12 >= canvas.height - 50) {
+                    this.y = canvas.height - 50 - 12;
+                    setGameOver();
+                }
+                // Hit Ceiling
+                if (this.y - 12 <= 0) {
+                    this.y = 12;
+                    this.velocity = 0;
+                }
+            },
+            flap: function() {
+                this.velocity = this.jump;
+            }
+        };
+
+        // Pipes
+        const pipes = {
+            items: [],
+            width: 50, gap: 110, dx: 2,
+            draw: function() {
+                for (let i = 0; i < this.items.length; i++) {
+                    let p = this.items[i];
+                    ctx.fillStyle = "#73BF2E";
+                    ctx.strokeStyle = "#558C22";
+                    ctx.lineWidth = 2;
+
+                    // Top Pipe
+                    ctx.fillRect(p.x, 0, this.width, p.top);
+                    ctx.strokeRect(p.x, 0, this.width, p.top);
+                    ctx.fillRect(p.x - 2, p.top - 20, this.width + 4, 20); // Cap
+                    ctx.strokeRect(p.x - 2, p.top - 20, this.width + 4, 20);
+
+                    // Bottom Pipe
+                    ctx.fillRect(p.x, p.bottom, this.width, canvas.height - p.bottom - 50);
+                    ctx.strokeRect(p.x, p.bottom, this.width, canvas.height - p.bottom - 50);
+                    ctx.fillRect(p.x - 2, p.bottom, this.width + 4, 20); // Cap
+                    ctx.strokeRect(p.x - 2, p.bottom, this.width + 4, 20);
+                }
+            },
+            update: function() {
+                // Add new pipe
+                if (frames % 100 === 0) {
+                    let minTop = 50;
+                    let maxTop = canvas.height - 50 - this.gap - 50;
+                    let topHeight = Math.floor(Math.random() * (maxTop - minTop + 1) + minTop);
+                    
+                    this.items.push({
+                        x: canvas.width,
+                        top: topHeight,
+                        bottom: topHeight + this.gap,
+                        passed: false
+                    });
+                }
+
+                for (let i = 0; i < this.items.length; i++) {
+                    let p = this.items[i];
+                    p.x -= this.dx;
+
+                    // Collision Detection
+                    // Bird radius is roughly 10 for collision
+                    if (bird.x + 10 > p.x && bird.x - 10 < p.x + this.width &&
+                        (bird.y - 10 < p.top || bird.y + 10 > p.bottom)) {
+                        setGameOver();
+                    }
+
+                    // Score Update
+                    if (p.x + this.width < bird.x && !p.passed) {
+                        score++;
+                        scoreBoard.innerText = score;
+                        p.passed = true;
+                    }
+
+                    // Remove off-screen pipes
+                    if (p.x + this.width < 0) {
+                        this.items.shift();
+                        i--;
+                    }
+                }
+            },
+            reset: function() {
+                this.items = [];
+            }
+        };
+
+        // Draw Ground and City Background Silhouette
+        function drawBackground() {
+            // Clouds/City Silhouette (Simplified)
+            ctx.fillStyle = "#A3E4D7";
+            ctx.fillRect(0, canvas.height - 100, canvas.width, 50);
+            
+            // Ground
+            ctx.fillStyle = "#DED895"; // Sand
+            ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+            ctx.fillStyle = "#73BF2E"; // Grass
+            ctx.fillRect(0, canvas.height - 50, canvas.width, 10);
+            ctx.strokeStyle = "#558C22";
+            ctx.strokeRect(0, canvas.height - 50, canvas.width, 10);
+        }
+
+        // Game State Handlers
+        function setGameOver() {
+            gameState = "GAMEOVER";
+            scoreBoard.style.display = "none";
+            gameOverScreenLayer.style.display = "flex";
+            finalScoreEl.innerText = score;
+            
+            if (score > bestScore) {
+                bestScore = score;
+                localStorage.setItem("birdyBestScore", bestScore);
+            }
+            bestScoreEl.innerText = bestScore;
+        }
+
+        function resetGame() {
+            bird.y = 150;
+            bird.velocity = 0;
+            bird.rotation = 0;
+            pipes.reset();
+            score = 0;
+            scoreBoard.innerText = score;
+            frames = 0;
+        }
+
+        // Main Game Loop
+        function loop() {
+            ctx.fillStyle = "#70C5CE";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawBackground();
+            pipes.draw();
+            bird.draw();
+
+            if (gameState === "PLAY") {
+                pipes.update();
+                bird.update();
+                frames++;
+            } else if (gameState === "START") {
+                // Hover effect on start screen
+                bird.y = 150 + Math.cos(frames / 15) * 5;
+                frames++;
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        // Input Handler (Tap / Click)
+        function handleInput(e) {
+            e.preventDefault(); // Prevents double firing on mobile
+            if (gameState === "START") {
+                gameState = "PLAY";
+                startScreen.style.display = "none";
+                scoreBoard.style.display = "block";
+                bird.flap();
+            } else if (gameState === "PLAY") {
+                bird.flap();
+            } else if (gameState === "GAMEOVER") {
+                // Short delay to prevent accidental instant restart
+                setTimeout(() => {
+                    resetGame();
+                    gameOverScreenLayer.style.display = "none";
+                    startScreen.style.display = "flex";
+                    gameState = "START";
+                }, 200);
+            }
+        }
+
+        // Event Listeners
+        window.addEventListener("touchstart", handleInput, { passive: false });
+        window.addEventListener("mousedown", handleInput);
+
+        // Start Loop
+        loop();
+    </script>
+</body>
+</html>
