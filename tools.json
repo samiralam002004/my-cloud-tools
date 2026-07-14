@@ -2,7 +2,19 @@
   {
     "name": "Snake.io",
     "description": "Play classic snake game.",
-    "icon": "https://raw.githubusercontent.com/samiralam002004/my-cloud-tools/main/game_png/snake.webp",
+    "icon": "https://cdn-icons-png.flaticon.com/512/5113/5113030.png",
     "url": "https://samiralam002004.github.io/my-cloud-tools/games_png/snake.html"
+  },
+  {
+    "name": "Birdy Bird",
+    "description": "Tap to fly and avoid the pipes in this retro clone.",
+    "icon": "https://cdn-icons-png.flaticon.com/512/3662/3662817.png",
+    "url": "https://samiralam002004.github.io/my-cloud-tools/games_png/birdybird.html"
+  },
+  {
+    "name": "Zombie Shooter",
+    "description": "Survive the zombie horde! Drag to move, auto-shoot.",
+    "icon": "https://cdn-icons-png.flaticon.com/512/3075/3075975.png",
+    "url": "https://samiralam002004.github.io/my-cloud-tools/games_png/zombie.html"
   }
 ]
