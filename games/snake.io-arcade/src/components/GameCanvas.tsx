@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Snake, Food, Particle, GameMode, GameStats, Position, Skin } from '../types';
+import { Snake, Food, Particle, GameMode, GameStats, Position, Skin, PowerUp, PowerUpType } from '../types';
 import { getSkinById, SKINS } from '../utils/skins';
 import { audio } from '../utils/audio';
 
@@ -8,7 +8,7 @@ interface GameCanvasProps {
   selectedSkinId: string;
   gameMode: GameMode;
   onGameOver: (stats: GameStats) => void;
-  onUpdateHUD: (score: number, kills: number, aliveCount: number, leaderBoard: Array<{ name: string; score: number; isPlayer: boolean; color: string }>) => void;
+  onUpdateHUD: (score: number, kills: number, aliveCount: number, leaderBoard: Array<{ name: string; score: number; isPlayer: boolean; color: string }>, magnetTimeLeft?: number, invisibleTimeLeft?: number) => void;
   isMuted: boolean;
 }
 
@@ -43,6 +43,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     player: Snake | null;
     snakes: Map<string, Snake>;
     foods: Map<string, Food>;
+    powerUps: Map<string, PowerUp>;
     particles: Particle[];
     camX: number;
     camY: number;
@@ -59,10 +60,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     kills: number;
     isDead: boolean;
     botNames: string[];
+    touchActive: boolean;
+    touchStartX: number;
+    touchStartY: number;
+    touchCurrentX: number;
+    touchCurrentY: number;
   }>({
     player: null,
     snakes: new Map(),
     foods: new Map(),
+    powerUps: new Map(),
     particles: [],
     camX: 0,
     camY: 0,
@@ -78,6 +85,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     startTime: Date.now(),
     kills: 0,
     isDead: false,
+    touchActive: false,
+    touchStartX: 0,
+    touchStartY: 0,
+    touchCurrentX: 0,
+    touchCurrentY: 0,
     botNames: [
       'SlitherSlayer', 'CobraCommander', 'NeonMamba', 'AlphaGlider', 'ToxicViper',
       'QuantumWorm', 'GoldSlime', 'ShadowStriker', 'InfernoCobra', 'MegaZebra',
@@ -161,26 +173,76 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       }
     };
 
-    // Touch handlers for mobile
+    const getCanvasCoords = (clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top,
+      };
+    };
+
+    // Touch handlers for mobile with an elegant, responsive virtual joystick
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length > 0) {
         const touch = e.touches[0];
-        const pos = getPointerPos(touch.clientX, touch.clientY);
-        stateRef.current.mouseX = pos.x;
-        stateRef.current.mouseY = pos.y;
+        const target = e.target as HTMLElement;
+        if (target && (target.id === 'boost-btn' || target.closest('#boost-btn-container'))) {
+          return;
+        }
+
+        const s = stateRef.current;
+        const coords = getCanvasCoords(touch.clientX, touch.clientY);
+        s.touchActive = true;
+        s.touchStartX = coords.x;
+        s.touchStartY = coords.y;
+        s.touchCurrentX = coords.x;
+        s.touchCurrentY = coords.y;
         
-        // Multi-touch logic or buttons can set boosting
-        // For standard dragging on screen, turn towards target
+        // SNAPPY: Point snake towards direct touch point initially
+        const pos = getPointerPos(touch.clientX, touch.clientY);
+        s.mouseX = pos.x;
+        s.mouseY = pos.y;
       }
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length > 0) {
         const touch = e.touches[0];
-        const pos = getPointerPos(touch.clientX, touch.clientY);
-        stateRef.current.mouseX = pos.x;
-        stateRef.current.mouseY = pos.y;
+        const s = stateRef.current;
+        if (s.touchActive) {
+          const coords = getCanvasCoords(touch.clientX, touch.clientY);
+          s.touchCurrentX = coords.x;
+          s.touchCurrentY = coords.y;
+          
+          const dx = s.touchCurrentX - s.touchStartX;
+          const dy = s.touchCurrentY - s.touchStartY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (dist > 5) {
+            s.mouseX = dx;
+            s.mouseY = dy;
+          }
+
+          // Visual clamp for drawing joystick knob nicely inside its bounds
+          const maxRadius = 45;
+          if (dist > maxRadius) {
+            s.touchCurrentX = s.touchStartX + (dx / dist) * maxRadius;
+            s.touchCurrentY = s.touchStartY + (dy / dist) * maxRadius;
+          }
+        } else {
+          const pos = getPointerPos(touch.clientX, touch.clientY);
+          s.mouseX = pos.x;
+          s.mouseY = pos.y;
+        }
       }
+    };
+
+    const handleTouchEnd = () => {
+      stateRef.current.touchActive = false;
+    };
+
+    const handleTouchCancel = () => {
+      stateRef.current.touchActive = false;
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -190,18 +252,30 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     window.addEventListener('keyup', handleKeyUp);
     canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: true });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
+    canvas.addEventListener('touchcancel', handleTouchCancel, { passive: true });
 
     // Initial game spawning
     initGame();
 
-    // Start requestAnimationFrame loop
+    // Start requestAnimationFrame loop with high-resolution delta-time
     let animationId: number;
-    const renderLoop = () => {
-      updateGame();
+    let lastTime = performance.now();
+    
+    const renderLoop = (time: number = performance.now()) => {
+      let deltaTime = time - lastTime;
+      // Cap deltaTime to avoid massive teleportation/physics jumps (e.g., when switching tabs)
+      if (deltaTime > 100 || deltaTime <= 0) deltaTime = 16.666;
+      lastTime = time;
+
+      // Normalized delta time (dt is 1.0 at perfect 60 FPS)
+      const dt = deltaTime / 16.666;
+
+      updateGame(dt);
       drawGame();
       animationId = requestAnimationFrame(renderLoop);
     };
-    renderLoop();
+    animationId = requestAnimationFrame(renderLoop);
 
     return () => {
       cancelAnimationFrame(animationId);
@@ -210,6 +284,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+      canvas.removeEventListener('touchcancel', handleTouchCancel);
       resizeObserver.disconnect();
     };
   }, []);
@@ -219,6 +297,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const s = stateRef.current;
     s.snakes.clear();
     s.foods.clear();
+    s.powerUps.clear();
     s.particles = [];
     s.frameCount = 0;
     s.kills = 0;
@@ -249,6 +328,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       isBoosting: false,
       isDead: false,
       width: BASE_SNAKE_WIDTH,
+      magnetTimeLeft: 0,
+      invisibleTimeLeft: 0,
     };
 
     s.player = playerSnake;
@@ -259,6 +340,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // Spawn Initial Foods
     for (let i = 0; i < INITIAL_FOOD_COUNT; i++) {
       spawnRandomFood(false);
+    }
+
+    // Spawn Initial Power-Ups
+    for (let i = 0; i < 15; i++) {
+      spawnPowerUp();
     }
 
     // Spawn AI Snakes
@@ -310,6 +396,40 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
 
     s.foods.set(id, food);
+  };
+
+  // Spawns a random powerup (magnet or invisible potion) in the arena
+  const spawnPowerUp = (type?: PowerUpType, customPos?: Position) => {
+    const s = stateRef.current;
+    let rx = 0;
+    let ry = 0;
+
+    if (customPos) {
+      rx = customPos.x;
+      ry = customPos.y;
+    } else {
+      // Spawn inside circular boundary
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.sqrt(Math.random()) * (ARENA_RADIUS - 80);
+      rx = Math.cos(angle) * radius;
+      ry = Math.sin(angle) * radius;
+    }
+
+    const id = 'powerup_' + Math.random().toString(36).substring(2, 9);
+    const resolvedType = type || (Math.random() < 0.5 ? 'magnet' : 'invisible');
+    const color = resolvedType === 'magnet' ? '#38bdf8' : '#c084fc'; // Neon light blue vs beautiful purple
+
+    const powerUp: PowerUp = {
+      id,
+      x: rx,
+      y: ry,
+      type: resolvedType,
+      size: 16,
+      pulsePhase: Math.random() * Math.PI * 2,
+      color,
+    };
+
+    s.powerUps.set(id, powerUp);
   };
 
   // Spawn an AI Snake
@@ -403,7 +523,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   // Main simulation tick
-  const updateGame = () => {
+  const updateGame = (dt: number = 1) => {
     const s = stateRef.current;
     s.frameCount++;
 
@@ -586,14 +706,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     s.snakes.forEach((snake) => {
       if (snake.isDead) return;
 
-      // Smoothly steer angle towards targetAngle
-      const turnSpeed = snake.isBoosting ? 0.09 : 0.07;
-      snake.angle = lerpAngle(snake.angle, snake.targetAngle, turnSpeed);
+      // Decrement active powerup timers (scaled by dt)
+      if (snake.magnetTimeLeft && snake.magnetTimeLeft > 0) {
+        snake.magnetTimeLeft = Math.max(0, snake.magnetTimeLeft - dt / 60);
+      }
+      if (snake.invisibleTimeLeft && snake.invisibleTimeLeft > 0) {
+        snake.invisibleTimeLeft = Math.max(0, snake.invisibleTimeLeft - dt / 60);
+      }
 
-      // Move Head segment
+      // Smoothly steer angle towards targetAngle (scaled by dt)
+      const turnSpeed = (snake.isBoosting ? 0.09 : 0.07) * dt;
+      snake.angle = lerpAngle(snake.angle, snake.targetAngle, Math.min(0.95, turnSpeed));
+
+      // Move Head segment (scaled by dt)
       const head = snake.segments[0];
-      const vx = Math.cos(snake.angle) * snake.speed;
-      const vy = Math.sin(snake.angle) * snake.speed;
+      const vx = Math.cos(snake.angle) * snake.speed * dt;
+      const vy = Math.sin(snake.angle) * snake.speed * dt;
       
       const newHead = {
         x: head.x + vx,
@@ -640,10 +768,27 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const head = snake.segments[0];
       const headRadius = snake.width / 2;
 
+      // Check if magnet powerup is active
+      const hasMagnet = snake.magnetTimeLeft && snake.magnetTimeLeft > 0;
+
       s.foods.forEach((food) => {
-        const dx = food.x - head.x;
-        const dy = food.y - head.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        let dx = food.x - head.x;
+        let dy = food.y - head.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Magnetic Attraction Pull (250px radius)
+        if (hasMagnet && dist < 250) {
+          const pullSpeed = 9.5 * dt;
+          if (dist > 3) {
+            food.x -= (dx / dist) * pullSpeed;
+            food.y -= (dy / dist) * pullSpeed;
+            
+            // Recalculate distance after pull
+            dx = food.x - head.x;
+            dy = food.y - head.y;
+            dist = Math.sqrt(dx * dx + dy * dy);
+          }
+        }
 
         // Dynamic eat distance based on mouth size
         if (dist < headRadius + food.size + 3) {
@@ -669,6 +814,40 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       });
     });
 
+    // 4.5. POWER-UP PICKUP DETECTION (Player & Bots)
+    s.snakes.forEach((snake) => {
+      if (snake.isDead) return;
+      const head = snake.segments[0];
+      const headRadius = snake.width / 2;
+
+      s.powerUps.forEach((powerUp) => {
+        const dx = powerUp.x - head.x;
+        const dy = powerUp.y - head.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Touch collision with potion orb
+        if (dist < headRadius + powerUp.size + 4) {
+          if (powerUp.type === 'magnet') {
+            snake.magnetTimeLeft = 8.0; // 8 seconds of magnetism
+            spawnParticles(powerUp.x, powerUp.y, '#38bdf8', 25, 1.3);
+            if (!snake.isAI) {
+              audio.playBoost();
+            }
+          } else if (powerUp.type === 'invisible') {
+            snake.invisibleTimeLeft = 3.0; // 3 seconds of invisibility
+            spawnParticles(powerUp.x, powerUp.y, '#c084fc', 25, 1.3);
+            if (!snake.isAI) {
+              audio.playStart();
+            }
+          }
+
+          // Remove and respawn replacement powerup
+          s.powerUps.delete(powerUp.id);
+          spawnPowerUp();
+        }
+      });
+    });
+
     // 5. BOUNDARY DEATH CHECKS (Circular arena border)
     s.snakes.forEach((snake) => {
       if (snake.isDead) return;
@@ -683,16 +862,23 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // 6. HEAD-TO-BODY COLLISION CHECKS
     s.snakes.forEach((snakeA) => {
       if (snakeA.isDead) return;
+      
+      // Invisible/ghost snake head is completely invulnerable to collisions!
+      if (snakeA.invisibleTimeLeft && snakeA.invisibleTimeLeft > 0) return;
+
       const headA = snakeA.segments[0];
       const headRadius = snakeA.width / 2;
 
       s.snakes.forEach((snakeB) => {
         if (snakeB.isDead) return;
         
-        // If same snake, only check tail to prevent self-collision on tight turns (index > 4)
-        const startIndex = (snakeA.id === snakeB.id) ? 5 : 0;
+        // Self-collision is disabled! A snake cannot run into its own body.
+        if (snakeA.id === snakeB.id) return;
 
-        for (let i = startIndex; i < snakeB.segments.length; i++) {
+        // If other snake is invisible, it has ghosted out, so we glide through them
+        if (snakeB.invisibleTimeLeft && snakeB.invisibleTimeLeft > 0) return;
+
+        for (let i = 0; i < snakeB.segments.length; i++) {
           const segB = snakeB.segments[i];
           const dx = segB.x - headA.x;
           const dy = segB.y - headA.y;
@@ -710,11 +896,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // 7. PARTICLES UPDATE
     s.particles.forEach((p) => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vx *= 0.98; // Friction
-      p.vy *= 0.98;
-      p.life--;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= Math.pow(0.98, dt); // Friction
+      p.vy *= Math.pow(0.98, dt);
+      p.life -= dt;
       p.alpha = Math.max(0, p.life / p.maxLife);
     });
     s.particles = s.particles.filter((p) => p.life > 0);
@@ -722,9 +908,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // 8. CAMERA SMOOTHING FOLLOW
     if (s.player && !s.player.isDead) {
       const head = s.player.segments[0];
-      // Lerp camera
-      s.camX += (head.x - s.camX) * 0.08;
-      s.camY += (head.y - s.camY) * 0.08;
+      // Lerp camera (scaled by dt, clamped to prevent overshoot)
+      s.camX += (head.x - s.camX) * Math.min(0.95, 0.08 * dt);
+      s.camY += (head.y - s.camY) * Math.min(0.95, 0.08 * dt);
     }
 
     // 9. RESPOND / TRIGGER UI UPDATES PERIODICALLY
@@ -833,7 +1019,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       Math.floor(s.player.score),
       s.kills,
       s.snakes.size,
-      leaderboard
+      leaderboard,
+      s.player.magnetTimeLeft || 0,
+      s.player.invisibleTimeLeft || 0
     );
   };
 
@@ -919,6 +1107,67 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.shadowBlur = 0; // Reset
     });
 
+    // C.2 DRAW POWER-UPS (Magnet & Invisibility items)
+    s.powerUps.forEach((powerUp) => {
+      // Cull power-ups completely outside camera viewport
+      const pad = 40;
+      if (
+        powerUp.x < camX - width / 2 - pad ||
+        powerUp.x > camX + width / 2 + pad ||
+        powerUp.y < camY - height / 2 - pad ||
+        powerUp.y > camY + height / 2 + pad
+      ) {
+        return;
+      }
+
+      ctx.save();
+      
+      // Update pulse animation
+      powerUp.pulsePhase += 0.06;
+      const pulseFactor = 1 + 0.15 * Math.sin(powerUp.pulsePhase);
+      const radius = powerUp.size * pulseFactor;
+
+      // Draw beautiful glowing background aura
+      ctx.beginPath();
+      ctx.arc(powerUp.x, powerUp.y, radius * 1.5, 0, Math.PI * 2);
+      ctx.fillStyle = powerUp.type === 'magnet' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(192, 132, 252, 0.15)';
+      ctx.fill();
+
+      // Draw pulsing ring border
+      ctx.beginPath();
+      ctx.arc(powerUp.x, powerUp.y, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = powerUp.color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = powerUp.color;
+      ctx.shadowBlur = 15;
+      ctx.stroke();
+
+      // Draw solid glass orb center
+      ctx.beginPath();
+      ctx.arc(powerUp.x, powerUp.y, radius * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = '#0f172a'; // slate-900 center
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Draw custom icon glyph in the center
+      ctx.fillStyle = powerUp.color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowBlur = 0; // reset shadow
+      
+      if (powerUp.type === 'magnet') {
+        ctx.font = '14px sans-serif';
+        ctx.fillText('🧲', powerUp.x, powerUp.y);
+      } else {
+        ctx.font = '14px sans-serif';
+        ctx.fillText('🧪', powerUp.x, powerUp.y);
+      }
+
+      ctx.restore();
+    });
+
     // D. DRAW PARTICLES
     s.particles.forEach((p) => {
       ctx.save();
@@ -933,6 +1182,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // E. DRAW ALL SNAKES (Draw body segments from tail to head so they overlap correctly)
     const drawSnake = (snake: Snake) => {
       if (snake.isDead) return;
+
+      const isInvisible = snake.invisibleTimeLeft && snake.invisibleTimeLeft > 0;
+
+      ctx.save();
+      if (isInvisible) {
+        ctx.globalAlpha = 0.23; // ghost transparent look
+      }
 
       const skin = getSkinById(snake.skinId);
       const segments = snake.segments;
@@ -997,6 +1253,21 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       if (head) {
         const headRadius = widthMultiplier / 2;
         const angle = snake.angle;
+
+        // Draw magnetic pulse aura ring if active
+        if (snake.magnetTimeLeft && snake.magnetTimeLeft > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(head.x, head.y, headRadius * 3 + Math.sin(s.frameCount * 0.15) * 8, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+          ctx.lineWidth = 3;
+          ctx.setLineDash([6, 8]);
+          ctx.lineDashOffset = -s.frameCount * 0.55;
+          ctx.shadowColor = '#38bdf8';
+          ctx.shadowBlur = 10;
+          ctx.stroke();
+          ctx.restore();
+        }
 
         ctx.save();
         ctx.translate(head.x, head.y);
@@ -1133,6 +1404,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ctx.fillText(snake.name, head.x, head.y - headRadius - 6);
         ctx.shadowBlur = 0;
       }
+      ctx.restore(); // Restore globalAlpha save for invisibility
     };
 
     // Render other snakes first
@@ -1149,6 +1421,50 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // F. DRAW MINIMAP OVERLAY (Bottom Left of Canvas for mobile safety)
     drawMinimap(ctx, width, height, s);
+
+    // G. DRAW RELATIVE TOUCH JOYSTICK FOR MOBILES
+    drawTouchJoystick(ctx, s);
+  };
+
+  // Draws a beautiful, high-performance touch joystick for mobile steering
+  const drawTouchJoystick = (ctx: CanvasRenderingContext2D, s: any) => {
+    if (!s.touchActive) return;
+
+    ctx.save();
+    
+    // Outer boundary ring
+    ctx.beginPath();
+    ctx.arc(s.touchStartX, s.touchStartY, 45, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)'; // Sky blue outline
+    ctx.lineWidth = 3.5;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.35)'; // Sleek slate backdrop
+    ctx.fill();
+    ctx.stroke();
+    
+    // Inner center guide ring
+    ctx.beginPath();
+    ctx.arc(s.touchStartX, s.touchStartY, 18, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Translucent glass knob with a neon gradient
+    const knobGradient = ctx.createRadialGradient(
+      s.touchCurrentX, s.touchCurrentY, 2,
+      s.touchCurrentX, s.touchCurrentY, 15
+    );
+    knobGradient.addColorStop(0, '#ffffff');
+    knobGradient.addColorStop(0.3, '#38bdf8'); // sky blue
+    knobGradient.addColorStop(1, '#0284c7'); // dark sky blue
+
+    ctx.beginPath();
+    ctx.arc(s.touchCurrentX, s.touchCurrentY, 15, 0, Math.PI * 2);
+    ctx.fillStyle = knobGradient;
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 10;
+    ctx.fill();
+
+    ctx.restore();
   };
 
   // Draws a beautiful, high-performance tactical minimap

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GameMode, GameStats, Skin } from '../types';
 import { SKINS } from '../utils/skins';
 import { audio } from '../utils/audio';
-import { Trophy, Volume2, VolumeX, Shield, Zap, Sparkles, RefreshCw, User, Skull, Play, Award, Eye, Timer } from 'lucide-react';
+import { Trophy, Volume2, VolumeX, Shield, Zap, Sparkles, RefreshCw, User, Skull, Play, Award, Eye, Timer, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface GameUIProps {
@@ -21,6 +21,8 @@ interface GameUIProps {
     kills: number;
     aliveCount: number;
     leaderboard: Array<{ name: string; score: number; isPlayer: boolean; color: string }>;
+    magnetTimeLeft?: number;
+    invisibleTimeLeft?: number;
   };
   finalStats: GameStats | null;
   isMuted: boolean;
@@ -42,12 +44,30 @@ export const GameUI: React.FC<GameUIProps> = ({
   onToggleMute,
 }) => {
   const [activeTab, setActiveTab] = useState<'skins' | 'modes'>('skins');
+  const [isLeaderboardCollapsed, setIsLeaderboardCollapsed] = useState(false);
   const [bestScore, setBestScore] = useState<number>(() => {
     return Number(localStorage.getItem('snake_best_score') || 0);
   });
   const [bestKills, setBestKills] = useState<number>(() => {
     return Number(localStorage.getItem('snake_best_kills') || 0);
   });
+
+  // Automatically minimize leaderboard after 3 seconds when playing or when manually expanded
+  useEffect(() => {
+    if (gameState === 'PLAYING' && !isLeaderboardCollapsed) {
+      const timer = setTimeout(() => {
+        setIsLeaderboardCollapsed(true);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLeaderboardCollapsed, gameState]);
+
+  // Uncollapse the leaderboard when returning to menu or game over screens
+  useEffect(() => {
+    if (gameState !== 'PLAYING') {
+      setIsLeaderboardCollapsed(false);
+    }
+  }, [gameState]);
 
   // Track and save highest scores
   useEffect(() => {
@@ -198,7 +218,7 @@ export const GameUI: React.FC<GameUIProps> = ({
               </div>
 
               {/* RIGHT COLUMN: SKIN SELECTOR & MODE OPTIONS */}
-              <div className="flex-1 flex flex-col border-t md:border-t-0 md:border-l border-slate-800 pt-6 md:pt-0 md:pl-8 gap-4 max-h-full overflow-hidden">
+              <div className="flex-1 flex flex-col border-t md:border-t-0 md:border-l border-slate-800 pt-6 md:pt-0 md:pl-8 gap-4 md:max-h-full md:overflow-hidden">
                 
                 {/* Tabs */}
                 <div className="flex gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800 shrink-0">
@@ -228,7 +248,7 @@ export const GameUI: React.FC<GameUIProps> = ({
 
                 {/* TAB CONTENT: SKINS */}
                 {activeTab === 'skins' && (
-                  <div className="flex-1 flex flex-col gap-4 overflow-hidden min-h-[300px]">
+                  <div className="flex-1 flex flex-col gap-4 md:overflow-hidden md:min-h-[300px] min-h-0">
                     
                     {/* Live Selected Skin Preview Box */}
                     <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 flex flex-col items-center justify-center gap-2 relative shrink-0">
@@ -302,7 +322,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                     </div>
 
                     {/* Skin Grid list */}
-                    <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-2 pr-1" id="skins-grid">
+                    <div className="grid grid-cols-2 gap-2 pr-1 overflow-y-auto max-h-[220px] md:max-h-none md:flex-1" id="skins-grid">
                       {SKINS.map((skin) => {
                         const isSelected = skin.id === selectedSkinId;
                         return (
@@ -456,37 +476,95 @@ export const GameUI: React.FC<GameUIProps> = ({
               </div>
             </div>
 
-            {/* TOP-RIGHT LEADERBOARD PANEL */}
-            <div className="absolute top-4 right-20 z-10 w-64 max-h-[45vh] overflow-hidden p-4 rounded-2xl bg-slate-950/85 border border-slate-850/80 shadow-2xl backdrop-blur-md pointer-events-auto flex flex-col gap-2">
-              <h3 className="text-xs uppercase font-mono tracking-widest text-slate-400 font-black flex items-center gap-2 border-b border-slate-800 pb-2">
-                <Trophy className="w-4 h-4 text-amber-500 fill-amber-500/20" /> Leaderboard
-              </h3>
-
-              <div className="flex-1 overflow-y-auto space-y-1 pr-1 font-mono text-xs">
-                {hudData.leaderboard.map((sk, index) => {
-                  return (
-                    <div
-                      key={index}
-                      className={`flex items-center justify-between py-1 px-2 rounded-lg transition-all ${
-                        sk.isPlayer
-                          ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-bold'
-                          : 'text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 truncate max-w-[70%]">
-                        <span className={`font-black ${index === 0 ? 'text-amber-400' : index === 1 ? 'text-slate-400' : index === 2 ? 'text-amber-700' : 'text-slate-600'}`}>
-                          #{index + 1}
-                        </span>
-                        {/* Colored dot representation */}
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sk.color }} />
-                        <span className="truncate">{sk.isPlayer ? `${sk.name} (You)` : sk.name}</span>
-                      </div>
-                      <span className="font-extrabold">{sk.score}</span>
+            {/* POWERUP STATUS INDICATORS */}
+            {((hudData.magnetTimeLeft && hudData.magnetTimeLeft > 0) || (hudData.invisibleTimeLeft && hudData.invisibleTimeLeft > 0)) && (
+              <div className="absolute top-24 left-4 z-10 flex flex-col gap-2 pointer-events-auto w-[200px]" id="powerup-hud-panel">
+                {hudData.magnetTimeLeft && hudData.magnetTimeLeft > 0 ? (
+                  <div className="flex flex-col gap-1 px-3 py-2 rounded-xl bg-slate-950/85 border border-sky-500/30 shadow-lg backdrop-blur-md text-sky-400 font-mono text-[10px]">
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center gap-1">🧲 MAGNET ACTIVE</span>
+                      <span>{hudData.magnetTimeLeft.toFixed(1)}s</span>
                     </div>
-                  );
-                })}
+                    {/* Progress bar */}
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                      <div 
+                        className="h-full bg-gradient-to-r from-sky-400 to-blue-500 rounded-full transition-all duration-75"
+                        style={{ width: `${(hudData.magnetTimeLeft / 8.0) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                
+                {hudData.invisibleTimeLeft && hudData.invisibleTimeLeft > 0 ? (
+                  <div className="flex flex-col gap-1 px-3 py-2 rounded-xl bg-slate-950/85 border border-purple-500/30 shadow-lg backdrop-blur-md text-purple-400 font-mono text-[10px]">
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center gap-1">🧪 GHOST INVISIBLE</span>
+                      <span>{hudData.invisibleTimeLeft.toFixed(1)}s</span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                      <div 
+                        className="h-full bg-gradient-to-r from-purple-400 to-fuchsia-500 rounded-full transition-all duration-75"
+                        style={{ width: `${(hudData.invisibleTimeLeft / 3.0) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            </div>
+            )}
+
+            {/* TOP-RIGHT LEADERBOARD PANEL */}
+            {isLeaderboardCollapsed ? (
+              <button
+                onClick={() => setIsLeaderboardCollapsed(false)}
+                className="absolute top-4 right-16 md:right-20 z-10 p-2.5 rounded-xl bg-slate-950/85 border border-slate-850/80 shadow-2xl backdrop-blur-md pointer-events-auto flex items-center gap-1.5 hover:bg-slate-900 text-slate-300 hover:text-white transition-all active:scale-95"
+                title="Expand Leaderboard"
+              >
+                <Trophy className="w-4 h-4 text-amber-500 fill-amber-500/20 animate-pulse" />
+                <span className="text-[10px] font-mono uppercase tracking-wider font-extrabold">Leaderboard</span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+            ) : (
+              <div className="absolute top-4 right-16 md:right-20 z-10 w-48 md:w-64 max-h-[45vh] overflow-hidden p-3 md:p-4 rounded-2xl bg-slate-950/85 border border-slate-850/80 shadow-2xl backdrop-blur-md pointer-events-auto flex flex-col gap-1.5 md:gap-2">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 md:pb-2">
+                  <h3 className="text-[10px] md:text-xs uppercase font-mono tracking-widest text-slate-400 font-black flex items-center gap-1.5 md:gap-2">
+                    <Trophy className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-500 fill-amber-500/20" /> Leaderboard
+                  </h3>
+                  <button
+                    onClick={() => setIsLeaderboardCollapsed(true)}
+                    className="p-1 hover:bg-slate-800/80 rounded text-slate-400 hover:text-white transition-all pointer-events-auto"
+                    title="Minimize"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-0.5 md:space-y-1 pr-1 font-mono text-[10px] md:text-xs">
+                  {hudData.leaderboard.map((sk, index) => {
+                    return (
+                      <div
+                        key={index}
+                        className={`flex items-center justify-between py-0.5 md:py-1 px-1.5 md:px-2 rounded-lg transition-all ${
+                          sk.isPlayer
+                            ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-bold'
+                            : 'text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1 truncate max-w-[70%]">
+                          <span className={`font-black ${index === 0 ? 'text-amber-400' : index === 1 ? 'text-slate-400' : index === 2 ? 'text-amber-700' : 'text-slate-600'}`}>
+                            #{index + 1}
+                          </span>
+                          {/* Colored dot representation */}
+                          <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full shrink-0" style={{ backgroundColor: sk.color }} />
+                          <span className="truncate">{sk.isPlayer ? `${sk.name} (You)` : sk.name}</span>
+                        </div>
+                        <span className="font-extrabold">{sk.score}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
           </div>
         )}

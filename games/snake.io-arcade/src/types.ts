@@ -54,11 +54,27 @@ export interface Snake {
   isDead: boolean;
   width: number;
   
+  // Power-up active timers (in frames or ms)
+  magnetTimeLeft?: number; // duration left in seconds/ticks
+  invisibleTimeLeft?: number; // duration left in seconds/ticks
+  
   // AI specific properties
   aiState?: 'feed' | 'flee' | 'chase' | 'wander';
   aiDecisionTimer?: number;
   aiTargetX?: number;
   aiTargetY?: number;
+}
+
+export type PowerUpType = 'magnet' | 'invisible';
+
+export interface PowerUp {
+  id: string;
+  x: number;
+  y: number;
+  type: PowerUpType;
+  size: number;
+  pulsePhase: number;
+  color: string;
 }
 
 export interface GameStats {

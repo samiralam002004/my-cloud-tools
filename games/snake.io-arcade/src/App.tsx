@@ -22,6 +22,8 @@ export default function App() {
     kills: 0,
     aliveCount: 1,
     leaderboard: [] as Array<{ name: string; score: number; isPlayer: boolean; color: string }>,
+    magnetTimeLeft: 0,
+    invisibleTimeLeft: 0,
   });
 
   const [finalStats, setFinalStats] = useState<GameStats | null>(null);
@@ -54,6 +56,8 @@ export default function App() {
       kills: 0,
       aliveCount: 1,
       leaderboard: [],
+      magnetTimeLeft: 0,
+      invisibleTimeLeft: 0,
     });
     setFinalStats(null);
     setGameState('PLAYING');
@@ -68,9 +72,18 @@ export default function App() {
     score: number,
     kills: number,
     aliveCount: number,
-    leaderboard: Array<{ name: string; score: number; isPlayer: boolean; color: string }>
+    leaderboard: Array<{ name: string; score: number; isPlayer: boolean; color: string }>,
+    magnetTimeLeft?: number,
+    invisibleTimeLeft?: number
   ) => {
-    setHudData({ score, kills, aliveCount, leaderboard });
+    setHudData({
+      score,
+      kills,
+      aliveCount,
+      leaderboard,
+      magnetTimeLeft: magnetTimeLeft || 0,
+      invisibleTimeLeft: invisibleTimeLeft || 0,
+    });
   };
 
   const handleBackToMenu = () => {
