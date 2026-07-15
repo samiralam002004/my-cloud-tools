@@ -1,6 +1,0 @@
-{
-  "name": "Snake.io Arcade",
-  "description": "An action-packed Snake.io arena game featuring smart AI bots, dynamic camera tracking, speed boosting, custom skins, sound effects, particle engines, minimap, leaderboard, and full mobile support.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
