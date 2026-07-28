@@ -1,7 +1,7 @@
 [
   {
-    "name": "Beu Site",
-    "description": "Short revision notes for all subjects.",
+    "name": "8085-microprocessor-simulator",
+    "description": "code and simulate 8085 microprocessor programs.",
     "icon": "https://img.icons8.com/?size=100&id=aqWDxhA3yiU1&format=png&color=000000",
     "url": "https://8085-simulator-six.vercel.app/" 
   },
