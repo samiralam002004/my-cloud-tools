@@ -6,15 +6,9 @@
     "url": "https://8085-simulator-c4ev.vercel.app/"
   },
   {
-    "name": "PYQ Papers",
-    "description": "Previous Year Question papers.",
-    "icon": "https://cdn-icons-png.flaticon.com/512/2602/2602414.png",
-    "url": "https://en.wikipedia.org/wiki/Special:Random"
-  },
-  {
-    "name": "Objective Qs",
-    "description": "Practice MCQs for exams.",
-    "icon": "https://cdn-icons-png.flaticon.com/512/3409/3409929.png",
-    "url": "https://en.wikipedia.org/wiki/Special:Random"
+    "name": "Electronics Simulator",
+    "description": "simulate electronic & electrical circuits and components.",
+    "icon": "https://img.icons8.com/?size=100&id=hcpzP3uMsL2d&format=png&color=000000",
+    "url": "https://electronices-simulator.vercel.app/"
   }
 ]
