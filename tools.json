@@ -22,5 +22,41 @@
     "description": "run and try to go....",
     "icon": "https://cdn-icons-png.flaticon.com/512/3075/3075976.png",
     "url": "https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://geektyper.com/&ved=2ahUKEwjbyOf3hPOVAxXCj-EIHbDnKocQFnoECBIQAQ&sqi=2&usg=AOvVaw30t0TmCiRJzgQf6GafoRBw"
+  },
+  {
+    "name": "3d infinite car racing",
+    "description": "Tap to left to move right and tap right to move left on the road.",
+    "icon": "https://img.icons8.com/?size=100&id=Kqh96tkiHVwJ&format=png&color=000000",
+    "url": "https://samiralam002004.github.io/my-cloud-tools/games/3d car racing.html"
+  },
+  {
+    "name": "play caram board",
+    "description": "Play caram board game with friends.",
+    "icon": "https://img.icons8.com/?size=100&id=lAfYK7whEhaH&format=png&color=000000",
+    "url": "https://samiralam002004.github.io/my-cloud-tools/games/caram.html"
+  },
+  {
+    "name": "play chess board",
+    "description": "Play chess board game with friends.",
+    "icon": "https://img.icons8.com/?size=100&id=89617&format=png&color=000000",
+    "url": "https://samiralam002004.github.io/my-cloud-tools/games/chess.html"
+  },
+  {
+    "name": "play ludo",
+    "description": "Play ludo board game with friends.",
+    "icon": "https://img.icons8.com/?size=100&id=BRCWQZKBm2DL&format=png&color=000000",
+    "url": "https://samiralam002004.github.io/my-cloud-tools/games/ludo.html"
+  },
+  {
+    "name": "play fruits cutter",
+    "description": "Slice the fruits and avoid bombs.",
+    "icon": "https://img.icons8.com/?size=100&id=dBb6ohf4eMcS&format=png&color=000000",
+    "url": "https://samiralam002004.github.io/my-cloud-tools/games/fruits cutter.html"
+  },
+  {
+    "name": "tap swap fun",
+    "description": "Swap & tap to bost score points.",
+    "icon": "https://img.icons8.com/?size=100&id=57371&format=png&color=000000",
+    "url": "https://samiralam002004.github.io/my-cloud-tools/games/tapswap_index.html"
   }
 ]
